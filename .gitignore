@@ -64,3 +64,14 @@ xcuserdata
 /prime/
 /stage/
 /snap/.snapcraft/
+
+.vscode/*
+config.log
+config.status
+nbproject
+.deps
+.dirstamp
+compiled_xrc.cpp
+src/poedit
+*.code-workspace
+
