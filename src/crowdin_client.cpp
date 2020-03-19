@@ -154,7 +154,7 @@ void CrowdinClient::HandleOAuthCallback(const std::string& uri)
         || m.str(2) != OAUTH_STATE) {
         return;
     }
-    
+
     m_oauth->post("/oauth/token", json_data(json({
         { "grant_type", "authorization_code" },
         { "client_id", OAUTH_CLIENT_ID },
@@ -288,7 +288,7 @@ dispatch::future<void> CrowdinClient::UploadFile(const std::string& project_id,
     data.add_value("import_duplicates", "0");
     data.add_value("import_eq_suggestions", "0");
     data.add_file("files[" + str::to_utf8(file) + "]", "upload.po", file_content);
-    
+
     return m_api->post(url, data).then([](json){});
 }
 
