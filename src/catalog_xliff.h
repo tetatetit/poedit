@@ -89,6 +89,7 @@ public:
     bool HasCapability(Cap cap) const override;
 
     static bool CanLoadFile(const wxString& extension);
+    static const wxString& GetBaseDir();
     wxString GetPreferredExtension() const override { return "xlf"; }
 
     static std::shared_ptr<XLIFFCatalog> Open(const wxString& filename);
@@ -100,9 +101,6 @@ public:
     std::string SaveToBuffer() override;
 
     ValidationResults Validate(bool wasJustLoaded) override;
-
-    Language GetLanguage() const override { return m_language; }
-    void SetLanguage(Language lang) override { m_language = lang; }
 
     // FIXME: PO specific
     bool HasDeletedItems() const override { return false;}
@@ -118,7 +116,6 @@ protected:
 
 protected:
     pugi::xml_document m_doc;
-    Language m_language;
 };
 
 
@@ -132,10 +129,15 @@ public:
 
     void SetLanguage(Language lang) override;
 
+    void SetFileName(const wxString& fn) override;
+    long GetFileId() const { return m_fileId; }
+    long GetProjectId() const { return m_projectId; }
+
 protected:
     void Parse(pugi::xml_node root) override;
 
     int m_subversion;
+    long m_fileId = -1, m_projectId = -1;
 };
 
 

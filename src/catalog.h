@@ -469,7 +469,7 @@ class Catalog
         Type GetFileType() const { return m_fileType; }
 
         wxString GetFileName() const { return m_fileName; }
-        void SetFileName(const wxString& fn);
+        virtual void SetFileName(const wxString& fn);
 
         /**
             Return base path to source code for extraction, or empty string if not configured.

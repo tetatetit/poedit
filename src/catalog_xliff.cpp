@@ -29,6 +29,7 @@
 #include "configuration.h"
 #include "str_helpers.h"
 #include "utility.h"
+#include "crowdin_gui.h"
 
 #include <wx/intl.h>
 #include <wx/log.h>
@@ -378,6 +379,29 @@ bool XLIFFCatalog::CanLoadFile(const wxString& extension)
     return extension == "xlf" || extension == "xliff";
 }
 
+const wxString& XLIFFCatalog::GetBaseDir()
+{
+    static wxString localBaseDir;
+
+    if(localBaseDir.empty()) {
+            
+        #if defined(__WXOSX__)
+            m_localBaseDir = wxGetHomeDir() + "/Library/Caches/net.poedit.Poedit";
+        #elif defined(__UNIX__)
+            if (!wxGetEnv("XDG_CACHE_HOME", &localBaseDir))
+                localBaseDir = wxGetHomeDir() + "/.cache";
+            localBaseDir += "/poedit";
+        #else
+            localBaseDir = wxStandardPaths::Get().GetUserDataDir() + wxFILE_SEP_PATH + "Cache";
+        #endif
+
+            localBaseDir += wxFILE_SEP_PATH;
+            localBaseDir += "Crowdin";
+    }
+
+    return localBaseDir;
+}
+
 
 std::shared_ptr<XLIFFCatalog> XLIFFCatalog::Open(const wxString& filename)
 {
@@ -595,14 +619,34 @@ public:
     }
 };
 
+void XLIFF1Catalog::SetFileName(const wxString& fn)
+{
+    XLIFFCatalog::SetFileName(fn);
+    m_fileName.AfterLast(wxFILE_SEP_PATH).ToLong(&m_fileId);
+    m_fileName.Right(m_fileName.size() - GetBaseDir().size() - 1).ToLong(&m_projectId);
+    if (m_fileId >= 0 && m_projectId >= 0) {
+        AttachCloudSync(std::make_shared<CrowdinSyncDestination>());
+    }
+    
+}
 
 void XLIFF1Catalog::Parse(pugi::xml_node root)
 {
     int id = 0;
+    
     for (auto file: root.children("file"))
     {
-        m_sourceLanguage = Language::TryParse(file.attribute("source-language").value());
-        m_language = Language::TryParse(file.attribute("target-language").value());
+        // TODO: Only first `file` node atthributes are used for now
+        //       what works well in case of either all next are same within
+        //       same `xliff` or if the only single `file` node is there
+        //       (what is always the only case for downloaded from Crowdin)
+        //       But should be taken into account and improved for probable
+        //       more wide varietty of cases in the future.
+        if(id == 0) {
+            m_sourceLanguage = Language::TryParse(file.attribute("source-language").value());
+            SetLanguage(Language::TryParse(file.attribute("target-language").value()));
+        }
+        
         for (auto unit: file.select_nodes(".//trans-unit"))
         {
             auto node = unit.node();
@@ -737,7 +781,7 @@ protected:
 void XLIFF2Catalog::Parse(pugi::xml_node root)
 {
     m_sourceLanguage = Language::TryParse(root.attribute("srcLang").value());
-    m_language = Language::TryParse(root.attribute("trgLang").value());
+    SetLanguage(Language::TryParse(root.attribute("trgLang").value()));
 
     int id = 0;
     for (auto segment: root.select_nodes(".//segment"))
