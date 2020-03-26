@@ -133,6 +133,8 @@ public:
     long GetFileId() const { return m_fileId; }
     long GetProjectId() const { return m_projectId; }
 
+    bool IsFromCrowdin() const override { return m_fileId > 0 && m_projectId > 0; }
+
 protected:
     void Parse(pugi::xml_node root) override;
 

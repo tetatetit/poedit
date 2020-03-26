@@ -552,9 +552,8 @@ class Catalog
         virtual void SetLanguage(Language lang);
 
         /// Is the PO file from Crowdin, i.e. sync-able?
-        bool IsFromCrowdin() const
-            { return m_header.HasHeader("X-Crowdin-Project") && m_header.HasHeader("X-Crowdin-File"); }
-
+        virtual bool IsFromCrowdin() const { return false; }
+            
         /// Returns true if the catalog contains obsolete entries (~.*)
         virtual bool HasDeletedItems() const = 0;
 

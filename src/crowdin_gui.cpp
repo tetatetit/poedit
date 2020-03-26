@@ -605,7 +605,6 @@ void CrowdinSyncFile(wxWindow *parent, std::shared_ptr<Catalog> catalog,
                 dispatch::on_main([=]{
                     dlg->Activity->Start(_(L"Downloading latest translations…"));
                 });
-
                 return CrowdinClient::Get().DownloadFile(
                         xliff->GetProjectId(), xliff->GetFileId(), xliff->GetFileName(), xliff->GetLanguage().LanguageTag(),
                         outfile.ToStdWstring()

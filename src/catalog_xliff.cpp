@@ -427,6 +427,7 @@ std::shared_ptr<XLIFFCatalog> XLIFFCatalog::Open(const wxString& filename)
     else
         throw XLIFFReadException(filename, wxString::Format(_("unsupported XLIFF version (%s)"), xliff_version));
 
+    cat->SetFileName(filename);
     cat->Parse(xliff_root);
 
     return cat;
@@ -624,7 +625,7 @@ void XLIFF1Catalog::SetFileName(const wxString& fn)
     XLIFFCatalog::SetFileName(fn);
     m_fileName.AfterLast(wxFILE_SEP_PATH).ToLong(&m_fileId);
     m_fileName.Right(m_fileName.size() - GetBaseDir().size() - 1).ToLong(&m_projectId);
-    if (m_fileId >= 0 && m_projectId >= 0) {
+    if (m_fileId > 0 && m_projectId > 0) {
         AttachCloudSync(std::make_shared<CrowdinSyncDestination>());
     }
     
