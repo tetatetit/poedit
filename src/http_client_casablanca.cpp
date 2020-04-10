@@ -135,7 +135,7 @@ public:
         #else
             #define USER_AGENT_PLATFORM
         #endif
-        m_userAgent = L"Poedit/" make_wide_str(POEDIT_VERSION) USER_AGENT_PLATFORM;
+        m_userAgent = L"crowdin-poedit/" make_wide_str(POEDIT_VERSION) USER_AGENT_PLATFORM;
 
         std::shared_ptr<http::http_pipeline_stage> gzip_stage = std::make_shared<gzip_compression_support>();
         m_native.add_handler(gzip_stage);
