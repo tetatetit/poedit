@@ -83,7 +83,7 @@ public:
 
         if (on)
         {
-            tool->SetLabel(_("Sync"));
+            tool->SetLabel(_("Sync with Crowdin"));
             tool->SetShortHelp(_("Synchronize the translation with Crowdin"));
             #ifdef __WXGTK3__
             SetIcon(4 , "poedit-sync-symbolic");
@@ -107,6 +107,8 @@ public:
             m_tb->SetToolDisabledBitmap(m_idUpdate, wxArtProvider::GetBitmap("poedit-update@disabled", wxART_TOOLBAR));
             #endif
         }
+        // Without below line tooltip is not updated, at least on Linux
+        m_tb->SetToolShortHelp(m_idUpdate, tool->GetShortHelp());
     }
 
 #ifdef __WXGTK3__
