@@ -1,5 +1,5 @@
 name: poedit
-version: "2.3"
+version: "2.4.7dev"
 summary: Simple translation editor
 description: >
   Translation editor for gettext (PO files) and XLIFF.
@@ -95,6 +95,7 @@ parts:
 
       ./bootstrap
       ./configure \
+        --enable-debug \
         --with-wx-prefix="$SNAPCRAFT_STAGE" \
         CPPFLAGS="-I${SNAPCRAFT_STAGE}/include -I${SNAPCRAFT_PART_INSTALL}/../build/deps/json/src" \
         LDFLAGS="-Wl,--copy-dt-needed-entries -L${SNAPCRAFT_STAGE}/lib" \
