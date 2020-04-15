@@ -139,13 +139,21 @@ public:
         return promise->get_future();
     }
 
+<<<<<<< HEAD
     dispatch::future<json> post(const std::string& url, const http_body_data& data, const http_client::headers& hdrs)
+=======
+    dispatch::future<json> post(const std::string& url, const http_body_data& data, const http_client::hdrs_t& hdrs)
+>>>>>>> d7bfe6edc... Buildable on MacOS
     {
         auto promise = std::make_shared<dispatch::promise<json>>();
 
         NSMutableURLRequest *request = [m_native requestWithMethod:@"POST"
                                                               path:str::to_NS(url)
                                                         parameters:nil];
+    
+        for(const auto& h : hdrs) {
+            [request addValue:str::to_NS(h.second) forHTTPHeaderField:str::to_NS(h.first)];
+        }
 
         auto body = data.body();
         [request setValue:str::to_NS(data.content_type()) forHTTPHeaderField:@"Content-Type"];
@@ -252,5 +260,5 @@ dispatch::future<void> http_client::download(const std::string& url, const std::
 
 dispatch::future<json> http_client::post(const std::string& url, const http_body_data& data, const http_client::headers& hdrs)
 {
-    return m_impl->post(url, data);
+    return m_impl->post(url, data, hdrs);
 }
