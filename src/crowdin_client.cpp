@@ -40,7 +40,6 @@
 
 #include <iostream>
 
-class wait;
 class _M_get_result;
 using namespace std;
 
@@ -175,7 +174,7 @@ void CrowdinClient::HandleOAuthCallback(const std::string& uri)
         return;
     }
 
-    m_oauth->post("/oauth/token", json_data(json({
+    m_oauth->post("oauth/token", json_data(json({
         { "grant_type", "authorization_code" },
         { "client_id", OAUTH_CLIENT_ID },
         { "client_secret", OAUTH_CLIENT_SECRET },
@@ -203,7 +202,7 @@ bool CrowdinClient::IsOAuthCallback(const std::string& uri)
 
 dispatch::future<CrowdinClient::UserInfo> CrowdinClient::GetUserInfo()
 {
-    return m_api->get("/user")
+    return m_api->get("user")
         .then([](json r)
         {
             cout << "\n\nGot user info: " << r << "\n\n";
@@ -237,7 +236,7 @@ dispatch::future<std::vector<CrowdinClient::ProjectListing>> CrowdinClient::GetU
 {
     // TODO: handle pagination if projects more than 500
     //       (what is quite rare case I guess)
-    return m_api->get("/projects?limit=500")
+    return m_api->get("projects?limit=500")
         .then([](json r)
         {
             cout << "\n\nGot projects: " << r << endl<<endl;
@@ -262,7 +261,7 @@ dispatch::future<std::vector<CrowdinClient::ProjectListing>> CrowdinClient::GetU
 
 dispatch::future<CrowdinClient::ProjectInfo> CrowdinClient::GetProjectInfo(const int project_id)
 {
-    auto url = "/projects/" + std::to_string(project_id);
+    auto url = "projects/" + std::to_string(project_id);
     return m_api->get(url)
         .then([this, url](json r)
         {
@@ -299,7 +298,7 @@ dispatch::future<void> CrowdinClient::DownloadFile(const long project_id,
 {
     cout << "\n\nGetting file URL: " << "/projects/" + std::to_string(project_id) + "/files/" + std::to_string(file_id) + "/download" << "\n\n";
     return m_api->post(
-        "/projects/" + std::to_string(project_id) + "/translations/builds/files/" + std::to_string(file_id),
+        "projects/" + std::to_string(project_id) + "/translations/builds/files/" + std::to_string(file_id),
         json_data(json({
             { "targetLanguageId", lang_tag },
             // for XLIFF files should be exported "as is" so set to `false`
@@ -318,7 +317,7 @@ dispatch::future<void> CrowdinClient::UploadFile(const long project_id,
                                                  const std::string& file_content)
 {
     return m_api->post(
-            "/storages",
+            "storages",
             octet_stream_data(file_content),
             { { "Crowdin-API-FileName", L"poedit.xliff"} }
         )
@@ -326,7 +325,7 @@ dispatch::future<void> CrowdinClient::UploadFile(const long project_id,
             cout << "File uploaded to temporary storage: " << r << "\n\n";
             const auto storageId = r["data"]["id"].get<int>();
             return m_api->post(
-                "/projects/" + std::to_string(project_id) + "/translations/" + lang_tag,
+                "projects/" + std::to_string(project_id) + "/translations/" + lang_tag,
                 json_data(json({
                     { "storageId", storageId },
                     { "fileId", file_id },

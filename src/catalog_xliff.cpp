@@ -29,11 +29,11 @@
 #include "configuration.h"
 #include "str_helpers.h"
 #include "utility.h"
-#include "crowdin_gui.h"
 
 #include <wx/intl.h>
 #include <wx/log.h>
 #include <wx/stdpaths.h>
+#include <wx/utils.h>
 
 #include <boost/algorithm/string.hpp>
 
@@ -387,7 +387,7 @@ const wxString& XLIFFCatalog::GetBaseDir()
     if(localBaseDir.empty()) {
             
         #if defined(__WXOSX__)
-            m_localBaseDir = wxGetHomeDir() + "/Library/Caches/net.poedit.Poedit";
+            localBaseDir = wxGetHomeDir() + "/Library/Caches/net.poedit.Poedit";
         #elif defined(__UNIX__)
             if (!wxGetEnv("XDG_CACHE_HOME", &localBaseDir))
                 localBaseDir = wxGetHomeDir() + "/.cache";
@@ -626,10 +626,6 @@ void XLIFF1Catalog::SetFileName(const wxString& fn)
     XLIFFCatalog::SetFileName(fn);
     m_fileName.AfterLast(wxFILE_SEP_PATH).ToLong(&m_fileId);
     m_fileName.Right(m_fileName.size() - GetBaseDir().size() - 1).ToLong(&m_projectId);
-    if (m_fileId > 0 && m_projectId > 0) {
-        AttachCloudSync(std::make_shared<CrowdinSyncDestination>());
-    }
-    
 }
 
 void XLIFF1Catalog::Parse(pugi::xml_node root)
