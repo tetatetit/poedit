@@ -510,7 +510,7 @@ private:
         localFileName << XLIFFCatalog::GetBaseDir()
                     << wxFILE_SEP_PATH << projectId << ' ' << projectName
                     << wxFILE_SEP_PATH << lang.Code()
-                    << wxFILE_SEP_PATH << localName.BeforeLast(wxFILE_SEP_PATH)
+                    << wxFILE_SEP_PATH << localName.BeforeLast(wxFILE_SEP_PATH) << wxFILE_SEP_PATH
                     << fileId << ' ' << localName.AfterLast(wxFILE_SEP_PATH) << ".xliff";
         auto localDirName = localFileName.BeforeLast(wxFILE_SEP_PATH);
  
