@@ -45,7 +45,6 @@
 
 #include <iostream>
 
-
 // GCC's libstdc++ didn't have functional std::regex implementation until 4.9
 #if (defined(__GNUC__) && !defined(__clang__) && !wxCHECK_GCC_VERSION(4,9))
     #include <boost/regex.hpp>
@@ -153,7 +152,7 @@ dispatch::future<void> CrowdinClient::Authenticate()
 {
     auto url = WrapLink(OAUTH_AUTHORIZE_URL);
     wxLaunchDefaultBrowser(url);
-    lock_guard<mutex> lck(m_authCallbackMutex);
+    std::lock_guard<std::mutex> lck(m_authCallbackMutex);
     m_authCallback.reset(new dispatch::promise<void>);
     return m_authCallback->get_future();
 }
@@ -176,7 +175,7 @@ void CrowdinClient::HandleOAuthCallback(const std::string& uri)
         { "redirect_uri", OAUTH_URI_PREFIX },
         { "code", m.str(1) }
     })).then([this](json r) {
-        lock_guard<mutex> lck(m_authCallbackMutex);
+        std::lock_guard<std::mutex> lck(m_authCallbackMutex);
         if (!m_authCallback)
            return;
         SaveAndSetToken(r["access_token"]);
@@ -262,7 +261,7 @@ dispatch::future<std::vector<CrowdinClient::ProjectListing>> CrowdinClient::GetU
 dispatch::future<CrowdinClient::ProjectInfo> CrowdinClient::GetProjectInfo(const int project_id)
 {
     auto url = "projects/" + std::to_string(project_id);
-    auto prj = make_shared<ProjectInfo>();
+    auto prj = std::make_shared<ProjectInfo>();
     enum { NO_ID = -1 };
         
     return m_api->get(url)
@@ -299,10 +298,10 @@ dispatch::future<CrowdinClient::ProjectInfo> CrowdinClient::GetProjectInfo(const
     {
         // Handle directories
         struct dir {
-            string name;
+            std::string name;
             int parentId;
         };
-        map<int, dir> dirs;
+        std::map<int, dir> dirs;
 
         for(const auto& i : r["data"]) {
             const json& d = i["data"],
@@ -316,7 +315,7 @@ dispatch::future<CrowdinClient::ProjectInfo> CrowdinClient::GetProjectInfo(const
             });
         }
 
-        stack<string> path;
+        std::stack<std::string> path;
         for(auto& i : prj->files) {
             int dirId = i.dirId;
             while(dirId != NO_ID) {
@@ -324,7 +323,7 @@ dispatch::future<CrowdinClient::ProjectInfo> CrowdinClient::GetProjectInfo(const
                 path.push(dir.name);
                 dirId = dir.parentId;
             }
-            string pathStr;
+            std::string pathStr;
             while(path.size()) {
                 pathStr += '/';
                 pathStr += path.top();
@@ -340,11 +339,11 @@ dispatch::future<CrowdinClient::ProjectInfo> CrowdinClient::GetProjectInfo(const
     }).then([this, url, prj](json r)
     {
         // Handle branches
-        map<int, string> branches;
+        std::map<int, std::string> branches;
 
         for(const auto& i : r["data"]) {
             const json& d = i["data"];
-            branches[d["id"]] = d["name"].get<string>();
+            branches[d["id"]] = d["name"].get<std::string>();
         }
 
         for(auto& i : prj->files) {
@@ -442,9 +441,9 @@ void CrowdinClient::SetToken(const std::string& token)
 
     auto domain = jwt::decode(token).get_payload_claim("domain");
     if(domain.get_type() == jwt::claim::type::null) {
-        m_api = make_unique<crowdin_http_client>(*this, "https://crowdin.com/api/v2");
+        m_api = std::make_unique<crowdin_http_client>(*this, "https://crowdin.com/api/v2");
     } else {
-        m_api = make_unique<crowdin_http_client>(*this, "https://" + domain.as_string() + ".crowdin.com/api/v2");
+        m_api = std::make_unique<crowdin_http_client>(*this, "https://" + domain.as_string() + ".crowdin.com/api/v2");
     }
 
     m_api->set_authorization("Bearer " + token);
