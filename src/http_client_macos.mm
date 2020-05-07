@@ -139,11 +139,7 @@ public:
         return promise->get_future();
     }
 
-<<<<<<< HEAD
     dispatch::future<json> post(const std::string& url, const http_body_data& data, const http_client::headers& hdrs)
-=======
-    dispatch::future<json> post(const std::string& url, const http_body_data& data, const http_client::hdrs_t& hdrs)
->>>>>>> d7bfe6edc... Buildable on MacOS
     {
         auto promise = std::make_shared<dispatch::promise<json>>();
 
