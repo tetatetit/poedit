@@ -37,6 +37,10 @@
 #include <wx/translation.h>
 #include <wx/utils.h>
 
+#include <iostream>
+
+using namespace std;
+
 // GCC's libstdc++ didn't have functional std::regex implementation until 4.9
 #if (defined(__GNUC__) && !defined(__clang__) && !wxCHECK_GCC_VERSION(4,9))
     #include <boost/regex.hpp>
@@ -62,33 +66,16 @@ namespace
 #define OAUTH_CLIENT_SECRET "p6Ko83cd4l4SD2TYeY8Fheffw8VuN3bML5jx7BeQ"
 //      any arbitrary unique unguessable string (e.g. UUID in hex)
 #define OAUTH_STATE         "948cf13ffffb47119d6cfa2b68898f67"
-#define OAUTH_AUTHORIZE_URL "/oauth/authorize" \
-	"?" "response_type" "=" "code" \
-	"&" "scope"		    "=" OAUTH_SCOPE \
-	"&" "client_id"		"=" OAUTH_CLIENT_ID \
-	"&" "state"		    "=" OAUTH_STATE
 //      The value of below macro should be set exactly as is (without quotes)
 //      to "Authorization Callback URL" of Crowdin application
 //      https://support.crowdin.com/enterprise/creating-oauth-app/
 #define OAUTH_URI_PREFIX    "poedit://auth/crowdin/"
-
-// Recursive extract files from /api/project/*/info response
-void ExtractFilesFromInfo(std::vector<std::wstring>& out, const json& r, const std::wstring& prefix)
-{
-    for (auto i : r["files"])
-    {
-        std::wstring name = prefix + str::to_wstring(i["name"]);
-        std::string node_type = i["node_type"];
-        if (node_type == "file")
-        {
-            out.push_back(name);
-        }
-        else if (node_type == "directory" || node_type == "branch")
-        {
-            ExtractFilesFromInfo(out, i, name + L"/");
-        }
-    }
-}
+#define OAUTH_AUTHORIZE_URL "/oauth/authorize" \
+	"?" "response_type" "=" "code" \
+	"&" "scope"         "=" OAUTH_SCOPE \
+	"&" "client_id"     "=" OAUTH_CLIENT_ID \
+	"&" "state"         "=" OAUTH_STATE \
+        "&" "redirect_uri"  "=" OAUTH_URI_PREFIX
 
 } // anonymous namespace
 
@@ -105,13 +92,14 @@ std::string CrowdinClient::WrapLink(const std::string& page)
 class CrowdinClient::crowdin_http_client : public http_client
 {
 public:
-    crowdin_http_client(CrowdinClient& owner, const std::string& url_prefix = "")
-        : http_client(url_prefix.empty() ? "https://berezins.crowdin.com/api/v2": url_prefix), m_owner(owner)
+    crowdin_http_client(CrowdinClient& owner, const std::string& url_prefix)
+        : http_client(url_prefix), m_owner(owner)
     {}
 
 protected:
     std::string parse_json_error(const json& response) const override
     {
+        cout << "\n\nJSON error: " << response << "\n\n";
         std::string msg = response["error"]["message"];
 
         // Translate commonly encountered messages:
@@ -128,21 +116,16 @@ protected:
             message = _("Not authorized, please sign in again.").utf8_str();
             m_owner.SignOut();
         }
+        printf("\n\nJSON error: %s\n\n", message.c_str());
     }
 
     CrowdinClient& m_owner;
 };
 
-class CrowdinClient::crowdin_oauth_client : public crowdin_http_client
-{
-public:
-    crowdin_oauth_client(CrowdinClient& owner)
-        : crowdin_http_client(owner, "https://accounts.crowdin.com")
-    {}
-};
-
-
-CrowdinClient::CrowdinClient() : m_api(new crowdin_http_client(*this)), m_oauth(new crowdin_oauth_client(*this))
+CrowdinClient::CrowdinClient() :
+    m_api(new crowdin_http_client(*this, "https://serhiy.crowdin.com/api/v2")),
+    m_oauth(new crowdin_http_client(*this, "https://accounts.crowdin.com")),
+    m_downloader(new crowdin_http_client(*this, "https://production-enterprise-tmp.downloads.crowdin.com")) 
 {
     SignInIfAuthorized();
 }
@@ -166,11 +149,12 @@ void CrowdinClient::HandleOAuthCallback(const std::string& uri)
 
     const regex re("code=([^&]+)&state=([^&]+)");
     smatch m;
-    if (!regex_search(uri, m, re))
+    if (!regex_search(uri, m, re)
+        || m.size() < 3
+        || m.str(2) != OAUTH_STATE) {
         return;
-    if(m.size() < 3 || m.str(2) != OAUTH_STATE)
-        return;
-
+    }
+    
     m_oauth->post("/oauth/token", json_data(json({
         { "grant_type", "authorization_code" },
         { "client_id", OAUTH_CLIENT_ID },
@@ -191,16 +175,23 @@ bool CrowdinClient::IsOAuthCallback(const std::string& uri)
     return boost::starts_with(uri, OAUTH_URI_PREFIX);
 }
 
+//TODO: validate JSON schema in all API responses
+//      and handle errors since now Poedit just crashes
+//      in case of some of expected keys missing
 
 dispatch::future<CrowdinClient::UserInfo> CrowdinClient::GetUserInfo()
 {
     return m_api->get("/user")
         .then([](json r)
         {
+            cout << "\n\nGot user info: " << r << "\n\n";
             const json& d = r["data"];
             UserInfo u;
             u.login = str::to_wstring(d["username"]);
-            u.name =  str::to_wstring(d["firstName"]) + " " +  str::to_wstring(d["lastName"]);
+            u.name = str::to_wstring(d.value("fullName", ""));
+            if(u.name.empty()) {
+                u.name = str::to_wstring(d["firstName"]) + " " + str::to_wstring(d["lastName"]);
+            }
             if(u.name.empty()) {
                 u.name = u.login;
             }
@@ -211,16 +202,24 @@ dispatch::future<CrowdinClient::UserInfo> CrowdinClient::GetUserInfo()
 
 dispatch::future<std::vector<CrowdinClient::ProjectListing>> CrowdinClient::GetUserProjects()
 {
-    return m_api->get("/api/account/get-projects?json=&role=all")
+    // TODO: handle pagination if projects more than 500
+    //       (what is quite rare case I guess)
+    return m_api->get("/projects?limit=500")
         .then([](json r)
         {
+            cout << "\n\nGot projects: " << r << endl<<endl;
             std::vector<ProjectListing> all;
-            for (auto i : r["projects"])
+            for (auto&& d : r["data"])
             {
+                const json& i = d["data"];
                 all.push_back({
                     str::to_wstring(i["name"]),
-                    i["identifier"],
-                    (bool)i["downloadable"].get<int>()
+                    i["id"].get<int>(),
+                    //TODO: should be tested with project not owning by
+                    //      currently authorized user as well (not only
+                    //      for owning) after it will be implemented in
+                    //      in API v2 (unimplemented yet)
+                    /*(bool)i["publicDownloads"].get<int>()*/true
                 });
             }
             return all;
@@ -228,39 +227,51 @@ dispatch::future<std::vector<CrowdinClient::ProjectListing>> CrowdinClient::GetU
 }
 
 
-dispatch::future<CrowdinClient::ProjectInfo> CrowdinClient::GetProjectInfo(const std::string& project_id)
+dispatch::future<CrowdinClient::ProjectInfo> CrowdinClient::GetProjectInfo(const int project_id)
 {
-    auto url = "/api/project/" + project_id + "/info?json=&project-identifier=" + project_id;
+    auto url = "/projects/" + std::to_string(project_id);
     return m_api->get(url)
-        .then([](json r){
+        .then([this, url](json r)
+        {
             ProjectInfo prj;
-            auto details = r["details"];
-            prj.name = str::to_wstring(details["name"]);
-            prj.identifier = details["identifier"];
-            for (auto i : r["languages"])
-            {
-                if (i["can_translate"].get<int>() != 0)
-                    prj.languages.push_back(Language::TryParse(str::to_wstring(i["code"])));
+            const json& d = r["data"];
+            prj.name = str::to_wstring(d["name"]);
+            prj.id = d["id"];
+            for (auto&& langCode : d["targetLanguageIds"]) {
+                prj.languages.push_back(Language::TryParse(str::to_wstring(langCode)));
             }
-            ExtractFilesFromInfo(prj.files, r, L"/");
-            return prj;
+            return m_api->get(url + "/files?limit=500")
+                .then([prj_ = prj](json r)
+                {
+                    auto prj = prj_;
+                    //TODO: files should be with full path
+                    for(auto&& i : r["data"]) {
+                        const json& d = i["data"];
+                        prj.files.push_back({L"/" + str::to_wstring(d["name"]), d["id"]});
+                    }
+                    //TODO: get more until all files gotten (if more than 500)
+                    return prj;
+                });
         });
 }
 
 
-dispatch::future<void> CrowdinClient::DownloadFile(const std::string& project_id,
-                                                   const std::wstring& file,
-                                                   const Language& lang,
+dispatch::future<void> CrowdinClient::DownloadFile(const int project_id,
+                                                   const int file_id,
+                                                   const std::wstring& lang_tag,
                                                    const std::wstring& output_file)
 {
-    // NB: "export_translated_only" means the translation is not filled with the source string
-    //     if there's no translation, i.e. what Poedit wants.
-    auto url = "/api/project/" + project_id + "/export-file"
-                   "?json="
-                   "&export_translated_only=1"
-                   "&language=" + lang.LanguageTag() +
-                   "&file=" + http_client::url_encode(file);
-    return m_api->download(url, output_file);
+    cout << "\n\nGetting file URL: " << "/projects/" + std::to_string(project_id) + "/files/" + std::to_string(file_id) + "/download" << "\n\n";
+    return m_api->post(
+        "/projects/" + std::to_string(project_id) + "/translations/builds/files/" + std::to_string(file_id),
+        json_data(json({
+            { "targetLanguageId", str::to_utf8(lang_tag) },
+            { "exportAsXliff", true }
+        })))
+        .then([this, output_file] (json r) {
+            cout << "\n\nGotten file URL: "<< r << "\n\n";
+            return m_downloader->download(r["data"]["url"], output_file);
+        });
 }
 
 
@@ -277,7 +288,7 @@ dispatch::future<void> CrowdinClient::UploadFile(const std::string& project_id,
     data.add_value("import_duplicates", "0");
     data.add_value("import_eq_suggestions", "0");
     data.add_file("files[" + str::to_utf8(file) + "]", "upload.po", file_content);
-
+    
     return m_api->post(url, data).then([](json){});
 }
 
@@ -294,6 +305,7 @@ void CrowdinClient::SignInIfAuthorized()
     std::string token;
     if (keytar::GetPassword("Crowdin", "", &token))
         SetToken(token);
+    cout << "\n\nToken: "<<token<<"\n\n";
 }
 
 
