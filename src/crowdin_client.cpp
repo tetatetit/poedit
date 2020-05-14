@@ -46,6 +46,7 @@
 #include <iostream>
 #include <ctime>
 
+
 // GCC's libstdc++ didn't have functional std::regex implementation until 4.9
 #if (defined(__GNUC__) && !defined(__clang__) && !wxCHECK_GCC_VERSION(4,9))
     #include <boost/regex.hpp>
@@ -58,6 +59,8 @@
     using std::regex_search;
     using std::smatch;
 #endif
+
+
 
 // ----------------------------------------------------------------
 // Implementation
@@ -84,7 +87,6 @@ namespace
 
 } // anonymous namespace
 
-
 std::string CrowdinClient::WrapLink(const std::string& page)
 {
     std::string url("https://accounts.crowdin.com");
@@ -104,8 +106,8 @@ public:
 protected:
     std::string parse_json_error(const json& response) const override
     {
-        std::cout << "\n\nJSON error: " << response << "\n\n";
-
+        wxLogTrace("poedit.crowdin", "JSON error: %s", response.dump().c_str());
+        
         try
         {
             return response.at("errors").at(0).at("error").at("errors").at(0).at("message");
@@ -133,7 +135,7 @@ protected:
             message = _("Not authorized, please sign in again.").utf8_str();
             m_owner.SignOut();
         }
-        std::cout << std::endl << std::endl << "JSON error: " << message << std::endl << std::endl;
+         wxLogTrace("poedit.crowdin", "JSON error: %s", message.c_str());
     }
 
     CrowdinClient& m_owner;
@@ -216,7 +218,7 @@ dispatch::future<CrowdinClient::UserInfo> CrowdinClient::GetUserInfo()
     return m_api->get("user")
         .then([](json r)
         {
-            std::cout << "\n\nGot user info: " << r << "\n\n";
+            wxLogTrace("poedit.crowdin", "Got user info: %s", r.dump().c_str());
             const json& d = r["data"];
             UserInfo u;
             u.login = str::to_wstring(d["username"]);
@@ -252,7 +254,7 @@ dispatch::future<std::vector<CrowdinClient::ProjectListing>> CrowdinClient::GetU
     return m_api->get("projects?limit=500")
         .then([](json r)
         {
-            std::cout << "\n\nGot projects: " << r << std::endl<<std::endl;
+            wxLogTrace("poedit.crowdin", "Got projects: %s", r.dump().c_str());
             std::vector<ProjectListing> all;
             for (const auto& d : r["data"])
             {
@@ -383,7 +385,7 @@ dispatch::future<void> CrowdinClient::DownloadFile(const long project_id,
                                                    const std::string& lang_tag,
                                                    const std::wstring& output_file)
 {
-    std::cout << "\n\nGetting file URL: " << "/projects/" + std::to_string(project_id) + "/files/" + std::to_string(file_id) + "/download" << "\n\n";
+    wxLogTrace("poedit.crowdin", "Getting file URL: projects/%ld/translations/builds/files/%ld", project_id, file_id);
     return RefreshToken().then([=] () {
     return m_api->post(
         "projects/" + std::to_string(project_id) + "/translations/builds/files/" + std::to_string(file_id),
@@ -399,7 +401,7 @@ dispatch::future<void> CrowdinClient::DownloadFile(const long project_id,
             // per request is not allowed by HTTP client backend on some platorms.
             // (e.g. on Linux).
             auto downloader = std::make_shared<crowdin_http_client>(*this, std::string((uri.GetScheme() + "://" + uri.GetServer()).mb_str()));
-            std::cout << "\n\nGotten file URL: "<< r << "\n\n";
+            wxLogTrace("poedit.crowdin", "Gotten file URL: %s", r.dump().c_str());
             // Below capturing of `[downloader]` is needed to preserve `downloader` object
             // from being destroyed before `download(...)` completes asynchroneously
             // (what happens already after current function returns)
@@ -421,7 +423,7 @@ dispatch::future<void> CrowdinClient::UploadFile(const long project_id,
             { { "Crowdin-API-FileName", "poedit.xliff"} }
         )
         .then([this, project_id, file_id, lang] (json r) {
-            std::cout << "File uploaded to temporary storage: " << r << "\n\n";
+            wxLogTrace("poedit.crowdin", "File uploaded to temporary storage: %s", r.dump().c_str());
             const auto storageId = r["data"]["id"].get<int>();
             return m_api->post(
                 "projects/" + std::to_string(project_id) + "/translations/" + lang.LanguageTag(),
@@ -432,7 +434,7 @@ dispatch::future<void> CrowdinClient::UploadFile(const long project_id,
                     { "autoApproveImported", true }
                 }))
                 .then([](json r) {
-                    std::cout << "File uploaded: " << r << "\n\n";
+                    wxLogTrace("poedit.crowdin", "File uploaded: %s", r.dump().c_str());
                 });
         });
     });
@@ -451,7 +453,7 @@ json CrowdinClient::LoadAuth()
 
 void CrowdinClient::SetAuth(const json& auth)
 {
-    std::cout << std::endl << std::endl << "Authorization: " << auth << std::endl << std::endl;
+     wxLogTrace("poedit.crowdin", "Authorization: %s", auth.dump().c_str());
 
     if(auth.empty()) {
         return;
