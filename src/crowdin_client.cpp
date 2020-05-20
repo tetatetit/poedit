@@ -37,7 +37,6 @@
 #include <ctime>
 
 #include <boost/algorithm/string.hpp>
-#include <jwt-cpp/jwt.h>
 
 #include <wx/translation.h>
 #include <wx/utils.h>
@@ -450,6 +449,37 @@ json CrowdinClient::LoadAuth()
                 : json();
 }
 
+static std::string base64_decode_json_part(const std::string &in) {
+
+    std::string out;
+    std::vector<int> t(256, -1);
+    {
+        static const char* b = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";//=
+        for (int i = 0; i < 64; i ++)
+            t[b[i]] = i;
+    }
+
+    int val = 0,
+        valb = -8;
+
+    for (uint8_t c : in) {
+        if (t[c] == -1)
+            continue;
+        val = (val << 6) + t[c];
+        valb += 6;
+        if (valb >= 0) {
+            char ch = char(val >> valb & 0xFF);
+            // Only printable (JSON) part needed
+            if(ch < 32 || ch > 126)
+                break;
+            out.push_back(ch);
+            valb -= 8;
+        }
+    }
+
+    return out;
+}
+
 void CrowdinClient::SetAuth(const json& auth)
 {
      wxLogTrace("poedit.crowdin", "Authorization: %s", auth.dump().c_str());
@@ -460,12 +490,19 @@ void CrowdinClient::SetAuth(const json& auth)
     std::string access_token = auth["access_token"];
     m_authRefreshToken = auth["refresh_token"].get<std::string>();
     m_authExpireTime = auth["expiration_time"].get<std::time_t>();
-    
-    auto domain = jwt::decode(access_token).get_payload_claim("domain");
-    if(domain.get_type() == jwt::claim::type::null)
-        m_api = std::make_unique<crowdin_http_client>(*this, "https://crowdin.com/api/v2");
-    else
-        m_api = std::make_unique<crowdin_http_client>(*this, "https://" + domain.as_string() + ".crowdin.com/api/v2");
+
+    std::string domain;
+    try
+    {
+        domain = json::parse(
+            std::string(wxString(
+                base64_decode_json_part(access_token)).AfterFirst('}').utf8_str()
+            )
+        ).at("domain");
+        domain += ".";
+    }
+    catch(...) {}
+    m_api = std::make_unique<crowdin_http_client>(*this, "https://" + domain + "crowdin.com/api/v2");
     m_api->set_authorization("Bearer " + access_token);
 }
 
