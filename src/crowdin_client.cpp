@@ -79,7 +79,8 @@ namespace
     "&" "scope"         "=" OAUTH_SCOPE \
     "&" "client_id"     "=" OAUTH_CLIENT_ID \
     "&" "state"         "=" OAUTH_STATE \
-    "&" "redirect_uri"  "=" OAUTH_URI_PREFIX
+    "&" "redirect_uri"  "=" OAUTH_URI_PREFIX \
+    "&" "utm_source=poedit.net&utm_medium=referral&utm_campaign=poedit" // source tracking
 
 } // anonymous namespace
 
