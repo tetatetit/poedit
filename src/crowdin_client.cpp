@@ -68,7 +68,6 @@ namespace
 
 #define OAUTH_SCOPE         "project+tm"
 #define OAUTH_CLIENT_ID     "k0uFz5HYQh0VzWgZmOpA"
-#define OAUTH_CLIENT_SECRET "p6Ko83cd4l4SD2TYeY8Fheffw8VuN3bML5jx7BeQ"
 //      any arbitrary unique unguessable string (e.g. UUID in hex)
 #define OAUTH_STATE         "948cf13ffffb47119d6cfa2b68898f67"
 //      The value of below macro should be set exactly as is (without quotes)
@@ -76,11 +75,11 @@ namespace
 //      https://support.crowdin.com/enterprise/creating-oauth-app/
 #define OAUTH_URI_PREFIX    "poedit://auth/crowdin/"
 #define OAUTH_AUTHORIZE_URL "/oauth/authorize" \
-	"?" "response_type" "=" "code" \
-	"&" "scope"         "=" OAUTH_SCOPE \
-	"&" "client_id"     "=" OAUTH_CLIENT_ID \
-	"&" "state"         "=" OAUTH_STATE \
-        "&" "redirect_uri"  "=" OAUTH_URI_PREFIX
+    "?" "response_type" "=" "token" \
+    "&" "scope"         "=" OAUTH_SCOPE \
+    "&" "client_id"     "=" OAUTH_CLIENT_ID \
+    "&" "state"         "=" OAUTH_STATE \
+    "&" "redirect_uri"  "=" OAUTH_URI_PREFIX
 
 } // anonymous namespace
 
@@ -159,28 +158,25 @@ dispatch::future<void> CrowdinClient::Authenticate()
 
 void CrowdinClient::HandleOAuthCallback(const std::string& uri)
 {
-    const regex re("code=([^&]+)&state=([^&]+)");
-    smatch m;
-    if (!regex_search(uri, m, re)
-        || m.size() < 3
-        || m.str(2) != OAUTH_STATE) {
-        return;
-    }
+    wxLogTrace("poedit.crowdin", "Callback URI %s", uri.c_str());
 
-    m_oauth->post("oauth/token", json_data({
-        { "grant_type", "authorization_code" },
-        { "client_id", OAUTH_CLIENT_ID },
-        { "client_secret", OAUTH_CLIENT_SECRET },
-        { "redirect_uri", OAUTH_URI_PREFIX },
-        { "code", m.str(1) }
-    })).then([this](json r) {
-        std::lock_guard<std::mutex> lck(m_authCallbackMutex);
-        if (!m_authCallback)
-           return;
-        SaveAndSetToken(r["access_token"]);
-        m_authCallback->set_value();
-        m_authCallback.reset();
-    });
+    smatch m;
+
+    if (!(regex_search(uri, m, regex("state=([^&]+)"))
+            && m.size() > 1
+            && m.str(1) == OAUTH_STATE))
+        return;
+
+    if (!(regex_search(uri, m, regex("access_token=([^&]+)"))
+            && m.size() > 1))
+        return;
+
+    std::lock_guard<std::mutex> lck(m_authCallbackMutex);
+    if (!m_authCallback)
+        return;
+    SaveAndSetToken(m.str(1));
+    m_authCallback->set_value();
+    m_authCallback.reset();
 }
 
 bool CrowdinClient::IsOAuthCallback(const std::string& uri)
